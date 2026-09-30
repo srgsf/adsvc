@@ -1,0 +1,31 @@
+{{define "content"}}{{with .Data}}
+<h1>{{$.T "nav.peers"}}</h1>
+<h2>{{$.T "peers.configured"}}</h2>
+<div class="scroll">
+<table class="grid">
+<thead><tr><th>{{$.T "peers.name"}}</th><th>{{$.T "peers.node"}}</th><th>{{$.T "peers.last_ok"}}</th><th>{{$.T "peers.error"}}</th>
+<th class="num">{{$.T "peers.pull"}}</th><th class="num">{{$.T "peers.push"}}</th><th class="num">{{$.T "peers.received"}}</th><th>{{$.T "peers.rejected"}}</th><th class="num">{{$.T "peers.relayed_trash"}}</th></tr></thead>
+<tbody>
+{{range .Peers}}<tr{{if .LastError}} class="warn"{{end}}>
+<td>{{.Name}}{{if not .Configured}} <span class="tag">{{$.T "peers.not_configured"}}</span>{{end}}</td>
+<td>{{with .NodeID}}<span class="mono small" title="{{.}}">{{.Short}}</span>{{else}}<span class="muted">{{$.T "peers.never"}}</span>{{end}}</td>
+<td>{{when .LastOK}}</td><td class="wrap">{{.LastError}}</td>
+<td class="num">{{.PullCursor}}</td><td class="num">{{.PushCursor}}</td><td class="num">{{.Received}}</td><td>{{counts .Rejected}}</td>
+<td class="num">{{.RelayedTrash}} / {{.Relayed}} <span class="muted">{{pct .RelayedTrash .Relayed}}</span></td>
+</tr>{{else}}<tr><td colspan="9" class="empty">{{$.T "peers.none"}}</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+<h2>{{$.T "peers.pushers"}}</h2>
+<p class="muted">{{$.T "peers.pushers_hint"}}</p>
+<div class="scroll">
+<table class="grid">
+<thead><tr><th>{{$.T "peers.node"}}</th><th>{{$.T "peers.last_push"}}</th><th class="num">{{$.T "peers.received"}}</th><th class="num">{{$.T "peers.duplicate"}}</th><th>{{$.T "peers.rejected"}}</th><th class="num">{{$.T "peers.relayed_trash"}}</th></tr></thead>
+<tbody>
+{{range .Pushers}}<tr><td>{{template "origin-id" (list ($.Origin .NodeID) .NodeID.Short .NodeID.String)}}</td><td>{{when .LastPush}}</td><td class="num">{{.Received}}</td><td class="num">{{.Duplicate}}</td><td>{{counts .Rejected}}</td>
+<td class="num">{{.RelayedTrash}} / {{.Relayed}} <span class="muted">{{pct .RelayedTrash .Relayed}}</span></td></tr>
+{{else}}<tr><td colspan="6" class="empty">{{$.T "peers.no_pushers"}}</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+{{end}}{{end}}

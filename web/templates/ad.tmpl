@@ -1,0 +1,104 @@
+{{define "content"}}
+<p class="crumbs"><a href="/ads">← {{.T "nav.ads"}}</a></p>
+<div id="ad-main">{{template "ad-main" .}}</div>
+<section id="ad-quality" hx-get="/ads/{{.Data.ID}}/quality" hx-trigger="load">
+<h2>{{.T "quality.title"}}</h2>
+<p class="muted">{{.T "quality.loading"}}</p>
+</section>
+{{end}}
+
+{{define "ad-main"}}{{with .Data}}
+<h1>{{.Label}} <span class="mono muted small">{{.ID}}</span></h1>
+{{if .Canonical}}<p class="flash err">{{$.T "ad.is_dup_of"}} <a href="/ads/{{.Canonical}}">{{or .CanonLabel (short .Canonical)}}</a> <span class="mono small">{{short .Canonical}}</span></p>
+{{else if .DupedBy}}<p class="flash err">{{$.T "ad.duped_by"}} {{range $i, $d := .DupedBy}}{{if $i}}, {{end}}<a href="/ads/{{$d.ID}}">{{or $d.Label (short $d.ID)}}</a> <span class="mono small">{{short $d.ID}}</span>{{end}}</p>
+{{else if .PossibleDup}}<p class="flash err">{{$.T "ad.possible_dup_of"}} <a href="/ads/{{.PossibleDup.ID}}">{{or .PossibleDup.Label (short .PossibleDup.ID)}}</a> <span class="mono small">{{short .PossibleDup.ID}}</span> — {{$.Tf "ad.possible_dup_score" .PossibleDup.Score}}</p>
+{{end}}
+<p>
+{{if .Tracked}}<span class="tag ok">{{$.T "ads.tracked"}}</span>{{else}}<span class="tag">{{$.T "ad.not_tracked"}}</span>{{end}}
+{{if .Pinned}}<span class="tag">{{$.T "ads.pinned"}}</span>{{end}}
+{{if ne .State "active"}}<span class="tag warn">{{$.T (printf "state.%s" .State)}}</span>{{end}}
+{{if .ConfirmedHere}}<span class="tag ok">{{$.T "ad.confirmed_here"}}</span>{{end}}
+</p>
+<dl class="facts">
+<dt>{{$.T "col.type"}}</dt><dd>{{$.T (printf "type.%s" .Type)}}</dd>
+<dt>{{$.T "col.trust"}}</dt><dd>{{f1 .Trust}}</dd>
+<dt>{{$.T "col.author"}}</dt><dd>{{$.Origin .Author}} <span class="mono muted small">{{.Author}}</span></dd>
+<dt>{{$.T "col.duration"}}</dt><dd>{{secs .DurationMs}}</dd>
+<dt>{{$.T "ad.points"}}</dt><dd>{{.Points}}</dd>
+<dt>{{$.T "ads.fp"}}</dt><dd>{{.FPVersion}}</dd>
+<dt>{{$.T "ad.created"}}</dt><dd>{{when .Created}}</dd>
+<dt>{{$.T "col.votes"}}</dt><dd><span class="up">+{{.Up}}</span> <span class="down">−{{.Down}}</span></dd>
+<dt>{{$.T "col.files"}}</dt><dd>{{.Files}}</dd>
+<dt>{{$.T "col.confirmations"}}</dt><dd>{{.Confirmations}}</dd>
+<dt>{{$.T "col.last_seen"}}</dt><dd>{{when .LastSeen}}</dd>
+{{with .Source}}<dt>{{$.T "ad.source"}}</dt><dd><a class="mono" href="/file?key={{.Key}}">{{.Key}}</a> {{pos .StartMs}}–{{pos .EndMs}}</dd>{{end}}
+{{with .Canonical}}<dt>{{$.T "ad.canonical"}}</dt><dd><a class="mono" href="/ads/{{.}}">{{.}}</a></dd>{{end}}
+</dl>
+
+<div class="actions">
+<form hx-post="/ads/{{.ID}}/label" hx-target="#ad-main">
+<label>{{$.T "col.label"}} <input name="label" value="{{.Label}}" maxlength="200" required></label>
+<select name="type" title="{{$.T "col.type"}}">{{range $t := list "ad" "intro"}}<option value="{{$t}}"{{if eq $t $.Data.Type}} selected{{end}}>{{$.T (printf "type.%s" $t)}}</option>{{end}}</select>
+<button type="submit">{{$.T "ad.save_label"}}</button>
+</form>
+<form hx-post="/ads/{{.ID}}/vote" hx-target="#ad-main">
+<select name="value" title="{{$.T "ad.vote"}}">
+<option value="+1"{{if and $.Data.MyVote (gt $.Data.MyVote.Value 0)}} selected{{end}}>+1</option>
+<option value="-1"{{if and $.Data.MyVote (lt $.Data.MyVote.Value 0)}} selected{{end}}>−1</option>
+</select>
+<select name="reason" title="{{$.T "ad.reason"}}">
+{{range $r := .Reasons}}<option value="{{$r}}"{{if and $.Data.MyVote (eq $.Data.MyVote.Reason $r)}} selected{{end}}>{{$.T (printf "reason.%s" $r)}}</option>{{end}}
+</select>
+<button type="submit">{{$.T "ad.vote"}}</button>
+</form>
+<form hx-post="/ads/{{.ID}}/pin" hx-target="#ad-main">
+<input type="hidden" name="on" value="{{if .Pinned}}0{{else}}1{{end}}">
+<button type="submit">{{if .Pinned}}{{$.T "ads.unpin"}}{{else}}{{$.T "ads.pin"}}{{end}}</button>
+</form>
+<form hx-post="/ads/{{.ID}}/dup" hx-target="#ad-main" hx-confirm="{{$.T "ad.dup_confirm"}}">
+<label>{{$.T "ad.dup_of"}} <input name="canonical" placeholder="{{$.T "ad.id_or_prefix"}}" required class="mono" size="14"></label>
+<button type="submit">{{$.T "ad.mark_dup"}}</button>
+</form>
+{{if .Tracked}}<form hx-post="/ads/{{.ID}}/delete" hx-target="#ad-main" hx-confirm="{{$.T "ad.delete_confirm"}}">
+<button type="submit" class="danger">{{$.T "ad.delete"}}</button>
+</form>{{end}}
+</div>
+
+<h2>{{$.T "ad.votes"}}</h2>
+{{if .Votes}}<table class="grid"><thead><tr><th>{{$.T "col.origin"}}</th><th class="num">{{$.T "ad.vote"}}</th><th>{{$.T "ad.reason"}}</th><th class="num">{{$.T "col.weight"}}</th><th>{{$.T "col.file"}}</th><th>{{$.T "col.time"}}</th></tr></thead><tbody>
+{{range .Votes}}<tr><td>{{$.Origin .Origin}}</td><td class="num">{{if gt .Value 0}}<span class="up">+1</span>{{else}}<span class="down">−1</span>{{end}}</td><td>{{$.T (printf "reason.%s" .Reason)}}</td><td class="num">{{f1 .Weight}}</td><td>{{if .Key}}<a class="mono" href="/file?key={{.Key}}">{{.Key}}</a>{{with .StartMs}} @ {{pos .}}{{end}}{{end}}</td><td>{{when .TS}}</td></tr>{{end}}
+</tbody></table>{{else}}<p class="muted">{{$.T "ad.no_votes"}}</p>{{end}}
+
+<h2>{{$.T "ad.labels"}}</h2>
+{{if .Labels}}<table class="grid"><thead><tr><th>{{$.T "col.origin"}}</th><th>{{$.T "col.label"}}</th><th>{{$.T "col.time"}}</th></tr></thead><tbody>
+{{range .Labels}}<tr><td>{{$.Origin .Origin}}</td><td>{{.Label}}</td><td>{{when .TS}}</td></tr>{{end}}
+</tbody></table>{{else}}<p class="muted">{{$.T "ad.no_labels"}}</p>{{end}}
+
+{{if .Dups}}<h2>{{$.T "ad.dups"}}</h2>
+<table class="grid"><thead><tr><th>{{$.T "col.origin"}}</th><th>{{$.T "ad.duplicate"}}</th><th>{{$.T "ad.canonical"}}</th><th>{{$.T "col.time"}}</th></tr></thead><tbody>
+{{range .Dups}}<tr><td>{{$.Origin .Origin}}</td><td><a class="mono" href="/ads/{{.Ad}}">{{short .Ad}}</a></td><td><a class="mono" href="/ads/{{.Canonical}}">{{short .Canonical}}</a></td><td>{{when .TS}}</td></tr>{{end}}
+</tbody></table>{{end}}
+
+<h2>{{$.T "ad.sightings"}}</h2>
+{{if .Sightings}}<table class="grid"><thead><tr><th>{{$.T "col.file"}}</th><th>{{$.T "col.origin"}}</th><th>{{$.T "col.position"}}</th><th class="num">{{$.T "col.score"}}</th><th>{{$.T "col.confirmed"}}</th></tr></thead><tbody>
+{{range .Sightings}}<tr><td><a class="mono" href="/file?key={{.Key}}">{{.Key}}</a></td><td>{{$.Origin .Origin}}</td><td>{{pos .StartMs}}–{{pos .EndMs}}</td><td class="num">{{.Score}}</td><td>{{if .Confirmed}}✓{{end}}</td></tr>{{end}}
+</tbody></table>{{else}}<p class="muted">{{$.T "ad.no_sightings"}}</p>{{end}}
+
+<h2>{{$.T "ad.history"}}</h2>
+<table class="grid"><thead><tr><th>{{$.T "col.time"}}</th><th>{{$.T "col.kind"}}</th><th>{{$.T "col.origin"}}</th><th>{{$.T "col.via"}}</th><th>{{$.T "col.what"}}</th></tr></thead><tbody>
+{{range .History}}<tr><td title="{{$.T "ad.received"}} {{when .Received}}">{{when .TS}}</td><td>{{$.T (printf "kind.%s" .Kind)}}</td><td>{{$.Origin .Origin}}</td><td>{{with .Via}}{{$.Origin .}}{{else}}<span class="muted">{{$.T "ad.here"}}</span>{{end}}</td><td class="wrap">{{.Summary}}</td></tr>
+{{else}}<tr><td colspan="5" class="empty">{{$.T "ad.no_history"}}</td></tr>{{end}}
+</tbody></table>
+{{end}}{{end}}
+
+{{define "ad-quality"}}{{with .Data}}
+<h2>{{$.T "quality.title"}}</h2>
+<dl class="facts">
+<dt>{{$.T "quality.windows"}}</dt><dd>{{.Windows}}</dd>
+<dt>{{$.T "quality.density"}}</dt><dd>{{f1 .PointsPerSec}}</dd>
+<dt>{{$.T "quality.self"}}</dt><dd>{{.SelfMin}} <span class="muted">({{$.T "quality.threshold"}} {{.MinScore}})</span></dd>
+<dt>{{$.T "quality.worst"}}</dt><dd>{{if .Worst}}{{.WorstScore}} — <a href="/ads/{{.Worst}}">{{or .WorstLabel (short .Worst)}}</a> <span class="muted">@ {{pos .WorstAtMs}}</span>{{else}}<span class="muted">{{$.T "quality.none"}}</span>{{end}}</dd>
+</dl>
+{{if lt .SelfMin .MinScore}}<p class="flash err">{{$.T "quality.weak"}}</p>
+{{else if lt .WorstScore .MinScore}}<p class="flash ok">{{$.T "quality.good"}}</p>{{end}}
+{{end}}{{end}}

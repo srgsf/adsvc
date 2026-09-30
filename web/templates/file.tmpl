@@ -1,0 +1,32 @@
+{{define "content"}}{{with .Data}}
+<p class="crumbs"><a href="/files">← {{$.T "nav.files"}}</a></p>
+<h1 class="mono">{{.Key}}</h1>
+<dl class="facts">
+{{if .Aliases}}<dt>{{$.T "file.aliases"}}</dt><dd class="mono">{{range $i, $a := .Aliases}}{{if $i}}, {{end}}{{$a}}{{end}}</dd>{{end}}
+<dt>{{$.T "col.duration"}}</dt><dd>{{if .DurationMs}}{{pos .DurationMs}}{{else}}—{{end}}</dd>
+<dt>{{$.T "files.coverage"}}</dt><dd>{{if .Own}}{{.CoveragePct}}% <span class="muted">{{range $i, $r := .Analyzed}}{{if $i}}, {{end}}{{pos (index $r 0)}}–{{pos (index $r 1)}}{{end}}</span>{{else}}<span class="muted">{{$.T "files.not_here"}}</span>{{end}}</dd>
+{{if not .Updated.IsZero}}<dt>{{$.T "col.updated"}}</dt><dd>{{when .Updated}}</dd>{{end}}
+</dl>
+
+<h2>{{$.T "file.side_by_side"}}</h2>
+<p class="muted">{{$.T "file.side_by_side_hint"}}</p>
+<div class="scroll">
+<table class="grid">
+<thead><tr><th>{{$.T "col.label"}}</th><th>{{$.T "col.position"}}</th>{{range .Origins}}<th class="num">{{$.Origin .}}</th>{{end}}<th></th></tr></thead>
+<tbody>
+{{range .Rows}}<tr{{if .Contradicted}} class="bad"{{else if .Disagree}} class="warn"{{end}}>
+<td><a href="/ads/{{.Ad}}">{{or .Label (short .Ad)}}</a></td><td>{{pos .StartMs}}–{{pos .EndMs}}</td>
+{{range .Cells}}<td class="num">{{if .Found}}{{.Score}}{{if .Confirmed}} ✓{{end}}{{else}}<span class="muted">—</span>{{end}}</td>{{end}}
+<td>{{if .Contradicted}}<span class="tag bad">{{$.T "file.contradicted"}}</span>{{else if .Disagree}}<span class="tag warn">{{$.T "file.disagree"}}</span>{{end}}</td>
+</tr>
+{{else}}<tr><td colspan="3" class="empty">{{$.T "file.no_detections"}}</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+
+<h2>{{$.T "file.reported"}}</h2>
+<p class="muted">{{$.T "file.reported_hint"}}</p>
+{{if .Reported}}<table class="grid"><thead><tr><th>{{$.T "col.label"}}</th><th>{{$.T "col.position"}}</th><th class="num">{{$.T "col.score"}}</th><th>{{$.T "col.confirmed"}}</th><th>{{$.T "file.from"}}</th></tr></thead><tbody>
+{{range .Reported}}<tr><td><a href="/ads/{{.Ad}}">{{or .Label (short .Ad)}}</a></td><td>{{pos .StartMs}}–{{pos .EndMs}}</td><td class="num">{{.Score}}</td><td>{{if .Confirmed}}✓{{end}}</td><td>{{if .Own}}{{$.T "origin.self"}}{{else}}{{$.T "file.peers"}}{{end}}</td></tr>{{end}}
+</tbody></table>{{else}}<p class="muted">{{$.T "file.nothing_reported"}}</p>{{end}}
+{{end}}{{end}}

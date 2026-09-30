@@ -1,0 +1,50 @@
+# The project site: site/ plus docs/usage.md and docs/handoff.md, built by `make site`
+# (pandoc in a container) and published with GitHub Pages. Runs only in a public repository.
+# Enable it once under Settings > Pages > Source: GitHub Actions.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - docs/usage.md
+      - docs/handoff.md
+      - scripts/build-site.sh
+      - web/static/img/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v5
+      - run: make site
+        env:
+          SITE_REPO: ${{ github.server_url }}/${{ github.repository }}
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: .cache/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

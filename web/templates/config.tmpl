@@ -1,0 +1,9 @@
+{{define "content"}}
+<h1>{{.T "nav.config"}}</h1>
+<div id="config-body">{{template "config-body" .}}</div>
+{{end}}
+
+{{define "config-body"}}
+<p><button hx-post="/config/reload" hx-target="#config-body" hx-disabled-elt="this">{{.T "config.reload"}}</button></p>
+<pre class="config">{{.Data.YAML}}</pre>
+{{end}}

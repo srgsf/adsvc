@@ -1,0 +1,65 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - modernize
+    - nilerr
+    - noctx
+    - revive
+    - unconvert
+    - usestdlibvars
+    - wastedassign
+  settings:
+    gosec:
+      excludes:
+        - G104 # unchecked errors: errcheck covers them
+        - G115 # integer conversions: demuxers convert fixed-width fields by design
+        - G204 # subprocesses: running ffmpeg with computed arguments is the point
+        - G304 # file paths from flags and labels files are the user's own
+        - G306 # output files (labels, bench results) are meant to be readable
+        - G602 # slice bounds: false positives on guarded indexing in the parsers
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+        - appendAssign # append(x, ...) into another slice is deliberate in the parsers
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: error-strings
+        - name: error-naming
+        - name: receiver-naming
+        - name: indent-error-flow
+        - name: unused-parameter
+          disabled: true
+    errcheck:
+      exclude-functions:
+        # best effort: nothing to do about a failed close/write of these
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (*net/http.Server).Close
+        - (*bufio.Writer).Flush
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      - path: _test\.go
+        linters: [gosec, noctx, bodyclose]
+      - path: internal/testmedia/
+        linters: [gosec, noctx]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/srgsf/adsvc

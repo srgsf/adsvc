@@ -1,0 +1,10 @@
+/bin/
+/data/
+/*.db
+/*.db-shm
+/*.db-wal
+/coverage.out
+.DS_Store
+config.yml
+dist/
+.cache/

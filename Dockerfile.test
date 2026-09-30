@@ -1,0 +1,9 @@
+# Test environment (make test | test-minimal | vet): Go with cgo for -race, plus a full
+# ffmpeg/ffprobe that generates the test media and serves as the oracle. Runs natively.
+# The oracle is pinned: container timelines are checked packet by packet against ffprobe,
+# and older muxers (e.g. Debian's 7.1) write slightly different Matroska timestamps.
+ARG FFMPEG_VERSION=9.0.2
+FROM mwader/static-ffmpeg:${FFMPEG_VERSION} AS ffmpeg
+
+FROM golang:1.27
+COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/

@@ -1,0 +1,55 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{{if and (ne .Name "login") (ne .Name "disabled")}}<meta name="theme-color" content="#072654">{{end}}
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"historyCacheSize":0,"responseHandling":[{"code":"204","swap":false},{"code":"[2345]..","swap":true}]}'>
+<title>{{.T (printf "nav.%s" .Name)}} · adsvc</title>
+<link rel="icon" type="image/png" sizes="16x16" href="{{.Asset "img/favicon-16.png"}}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{.Asset "img/favicon-32.png"}}">
+<link rel="apple-touch-icon" href="{{.Asset "img/icon-180.png"}}">
+<link rel="stylesheet" href="{{.Asset "css/admin.css"}}">
+<script src="{{.Asset "js/htmx.min.js"}}" defer></script>
+<script src="{{.Asset "js/admin.js"}}" defer></script>
+</head>
+<body hx-headers='{"X-Adsvc-Admin": "1"}'>
+{{if and (ne .Name "login") (ne .Name "disabled")}}
+<header>
+<nav>
+<a class="brand" href="/"><img src="{{.Asset "img/logo-80.png"}}" alt="adsvc" width="40" height="40"></a>
+{{if .User.Admin}}<a href="/ads"{{if or (eq .Name "ads") (eq .Name "ad")}} class="active"{{end}}>{{.T "nav.ads"}}</a>
+<a href="/files"{{if or (eq .Name "files") (eq .Name "file")}} class="active"{{end}}>{{.T "nav.files"}}</a>
+{{end}}<a href="/reports"{{if eq .Name "reports"}} class="active"{{end}}>{{.T "nav.reports"}}</a>
+{{if .User.Admin}}<a href="/origins"{{if eq .Name "origins"}} class="active"{{end}}>{{.T "nav.origins"}}</a>
+<a href="/peers"{{if eq .Name "peers"}} class="active"{{end}}>{{.T "nav.peers"}}</a>
+<a href="/tracking"{{if eq .Name "tracking"}} class="active"{{end}}>{{.T "nav.tracking"}}</a>
+<a href="/config"{{if eq .Name "config"}} class="active"{{end}}>{{.T "nav.config"}}</a>
+{{end}}</nav>
+<span class="version" title="adsvc {{.Version}}">{{.Version}}</span>
+{{with .User.Name}}<span class="user muted">{{.}}</span>{{end}}
+<button class="link" hx-post="/logout">{{.T "nav.logout"}}</button>
+</header>
+{{end}}
+<div id="flash" aria-live="polite">{{template "flash" .}}</div>
+<main>
+{{template "content" .}}
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "flash"}}{{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}{{if .Msg}}<p class="flash ok">{{.Msg}}</p>{{end}}{{end}}
+
+{{/* origin-id shows an origin: list (name as shown) (short id) (full id). */}}
+{{define "origin-id"}}{{$n := index . 0}}{{$s := index . 1}}{{if eq $n $s}}<span class="mono" title="{{index . 2}}">{{$s}}</span>{{else}}{{$n}} <span class="mono muted small" title="{{index . 2}}">{{$s}}</span>{{end}}{{end}}
+
+{{define "flash-oob"}}<div id="flash" hx-swap-oob="innerHTML">{{template "flash" .}}</div>{{end}}
+
+{{/* pager links to the neighbouring pages of a list: args P (the page), Prev, Next (URLs,
+"" for none), Target (what htmx swaps) and Info (the text between them). */}}
+{{define "pager"}}<nav class="pager">
+{{if .Prev}}<a href="{{.Prev}}" hx-get="{{.Prev}}" hx-target="{{.Target}}" hx-push-url="true">← {{.P.T "ads.prev"}}</a>{{end}}
+<span class="muted">{{.Info}}</span>
+{{if .Next}}<a href="{{.Next}}" hx-get="{{.Next}}" hx-target="{{.Target}}" hx-push-url="true">{{.P.T "ads.next"}} →</a>{{end}}
+</nav>{{end}}

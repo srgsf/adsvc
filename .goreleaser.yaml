@@ -1,0 +1,111 @@
+# Runs in the builder image (Dockerfile.builder) for make build | dist, and on the runner
+# (goreleaser-action) for a release.
+# The minimal ffmpeg in .cache/ffmpeg/bin/ comes from scripts/build-ffmpeg.sh (make runs it).
+# goreleaser works in .cache/goreleaser; make copies what a target is for into dist/.
+version: 2
+project_name: adsvc
+dist: .cache/goreleaser
+
+env:
+  - Metadata_Description=Detects known ads in video streams by audio fingerprinting.
+
+git:
+  tag_sort: -version:refname
+
+snapshot:
+  version_template: '{{ .Tag }}-{{ .ShortCommit }}-{{ index (split .CommitDate "T") 0 }}'
+
+before:
+  hooks:
+    - go mod tidy
+
+# Pure Go by design (ffmpeg is an external binary).
+builds:
+  - id: linux
+    main: ./cmd/adsvc
+    binary: &binary '{{ .ProjectName }}'
+    no_unique_dist_dir: &single '{{ .IsSingleTarget }}'
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - linux_arm_7
+    flags: &flags
+      - -trimpath
+    ldflags: &ldflags "-s -w -X main.version={{ .Version }}"
+
+  # macOS and Windows.
+  - id: desktop
+    main: ./cmd/adsvc
+    binary: *binary
+    no_unique_dist_dir: *single
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - darwin_arm64
+      - windows_amd64
+    flags: *flags
+    ldflags: *ldflags
+
+archives:
+  # Every archive holds adsvc, the minimal ffmpeg (the proxy picks up an ffmpeg next to its
+  # executable) with its license (LGPL: it travels with the binary), and config.yml.example. enroll/scan/serve still need a full ffmpeg on PATH.
+  - name_template: >-
+      {{- .ProjectName }}_
+      {{- .Tag }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end -}}
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: '.cache/ffmpeg/bin/{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}/ffmpeg{{ if eq .Os "windows" }}.exe{{ end }}'
+        strip_parent: true
+      - src: '.cache/ffmpeg/bin/{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}/ffmpeg-LICENSE'
+        strip_parent: true
+      - config.yml.example
+
+checksum:
+  name_template: 'checksums.txt'
+
+source:
+  enabled: false
+
+release:
+  mode: append
+  replace_existing_artifacts: true
+  make_latest: true
+
+changelog:
+  use: git
+  sort: asc
+
+dockers_v2:
+  - ids: [linux]
+    images:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY }}"
+    tags:
+      - "{{ .Tag }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+      - linux/arm/v7
+    extra_files:
+      - .cache/ffmpeg/bin
+    labels: &oci
+      "org.opencontainers.image.title": "{{.ProjectName}}"
+      "org.opencontainers.image.description": "{{.Env.Metadata_Description}}"
+      "org.opencontainers.image.url": "{{.GitURL}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+      "org.opencontainers.image.version": "{{.Tag}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.created": "{{.Date}}"
+    annotations: *oci
+    build_args:
+      "BINARY": "{{.ProjectName}}"
+    disable: "{{ .IsSnapshot }}"

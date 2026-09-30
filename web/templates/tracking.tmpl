@@ -1,0 +1,18 @@
+{{define "content"}}
+<h1>{{.T "nav.tracking"}}</h1>
+<div id="tracking-stats">{{template "tracking-stats" .}}</div>
+{{end}}
+
+{{define "tracking-stats"}}{{with .Data}}
+<dl class="facts">
+<dt>{{$.T "tracking.ads"}}</dt><dd>{{.Ads}} <span class="muted">({{$.Tf "tracking.policy" (f1 .MinTrust) .MaxAds}})</span></dd>
+<dt>{{$.T "tracking.index"}}</dt><dd>{{$.Tf "tracking.index_value" .IndexAds .Postings .Distinct}}</dd>
+<dt>{{$.T "tracking.overlay"}}</dt><dd>{{$.Tf "tracking.overlay_value" .OverlayAds .OverlayPostings}}</dd>
+<dt>{{$.T "tracking.dead"}}</dt><dd>{{$.Tf "tracking.dead_value" .DeadAds .DeadPostings}}</dd>
+<dt>{{$.T "tracking.file"}}</dt><dd>{{if .File}}<span class="mono">{{.File}}</span>, {{mib .MappedBytes}} {{$.T "tracking.mapped"}}{{else}}{{$.T "tracking.heap"}}{{end}}</dd>
+<dt>{{$.T "tracking.resident"}}</dt><dd>{{mib .HeapBytes}} {{$.T "tracking.in_heap"}}</dd>
+<dt>{{$.T "tracking.built"}}</dt><dd>{{when .Built}}{{if .BuildTookMs}} <span class="muted">({{.BuildTookMs}} ms)</span>{{end}}</dd>
+</dl>
+<button hx-post="/tracking/rebuild" hx-target="#tracking-stats" hx-disabled-elt="this">{{$.T "tracking.rebuild"}}</button>
+<p class="muted">{{$.T "tracking.rebuild_hint"}}</p>
+{{end}}{{end}}

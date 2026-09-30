@@ -1,0 +1,71 @@
+# adsvc proxy reads ./config.yml when it exists; -config <path> or $ADSVC_CONFIG name
+# another file. Copy this one to config.yml and edit it.
+#
+# Every key is optional; a flag given on the command line wins over this file. Unknown
+# keys are errors. `kill -HUP <pid>` reloads the file: an invalid file changes nothing,
+# and keys marked "restart" only take effect after a restart (the log says which).
+# This file holds secrets: keep it private (chmod 600).
+
+listen: localhost:8080          # restart; no host (":8080"): every interface, IPv4 and IPv6
+# public_url: http://192.168.1.10:8080   # how clients reach adsvc, for the Reports page's mpv
+                                # commands (behind a reverse proxy, say); unset: the request's host
+data_dir: /data/adsvc           # restart: catalogue.db and tracking.csr live here
+ffmpeg: ffmpeg                  # new sessions
+
+log:
+  level: info                   # debug, info, warn, error
+  format: text                  # text or json
+
+auth:                           # adsvc's own access control, never forwarded upstream
+  users:                        # without a user with a token, adsvc is open to anyone
+    alice:                      # names: letters, digits, '.', '_', '-'
+      tokens: [change-me]       # Authorization: Bearer <token>, or alice:<token>@host in the URL
+      admin: true               # sees every page at /; other users see their Reports only
+    tv-box:
+      tokens: [change-me-too]
+
+upstream:
+  allow: [torrserver.lan]       # hosts; empty = any host, or only routed ones
+  routes:                       # FROM=TO, as -route; the first match wins
+    - https://ts.example.com=http://127.0.0.1:8090
+
+media:                          # restart: a local folder to play through the proxy
+  dir: /srv/videos              # served read-only on listen; its pages give the play URLs
+  listen: localhost:8000        # loopback only, fixed port; no host = localhost
+
+metrics:                        # restart: Prometheus metrics at /metrics, no auth
+  listen: localhost:9464        # unset = off; no host = localhost; 0.0.0.0:9464 for a scraper elsewhere
+
+detect:
+  min_score: 20                 # new sessions
+  confirm_score: 40             # 0 = 2 x min_score
+  mark_window: 5m               # new sessions: decoded audio kept for /ads/mark
+  max_stall: 2s                 # how long a chunk may wait for the analyser
+  idle_timeout: 10m             # sessions idle this long are closed
+
+# Federation (docs/database.md): this node's opinion of other nodes, and its peers.
+# All of it is reloaded on SIGHUP.
+trust:
+  self: 10                      # weight of this node's ads, votes and detections
+  unknown: 0.2                  # weight of a node without its own below
+  min_trust: 1                  # ads are indexed from this trust up
+  file_map_min: 1               # summed weight a peer's detection needs to be shown
+  quota_per_day: 5000           # records accepted per node per 24 h
+  origins:                      # node ids from `adsvc identity`
+    "5eb2a9e160d0110d2ff0d97c6900866f5ad5e324fedbc5ae4313b6a8ee7bd83f": {name: friend, weight: 2}
+    "91fe000000000000000000000000000000000000000000000000000000000000": {blocked: true}
+
+tracking:
+  max_ads: 10000                # the index holds at most this many (the most trusted)
+
+sync:
+  name: my-node                 # shown to peers
+  serve: true                   # serve /sync/* (default true)
+  public: false                 # /sync/* without a token (the catalogue holds no secrets)
+  share: {ads: true, labels: true, votes: true, file_maps: true}
+  peers:
+    - name: friend
+      url: https://friend.example/adsvc   # no credentials in the URL
+      token: friends-token-for-us         # a user token on the peer: secret, config only
+      mode: both                # pull, push (a node behind NAT) or both
+      interval: 10m

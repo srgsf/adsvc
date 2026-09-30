@@ -1,0 +1,10 @@
+{{define "content"}}
+<form class="login" method="post" action="/login">
+<img class="logo" src="{{.Asset "img/logo-256.png"}}" alt="" width="128" height="128">
+<h1>adsvc</h1>
+<label for="token">{{.T "login.token"}}</label>
+<input id="token" name="token" type="password" autocomplete="current-password" required autofocus>
+<input type="hidden" name="next" value="{{.Next}}">
+<button type="submit">{{.T "login.submit"}}</button>
+</form>
+{{end}}

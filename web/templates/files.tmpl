@@ -1,0 +1,24 @@
+{{define "content"}}
+<h1>{{.T "nav.files"}}</h1>
+<form class="filters" action="/files" hx-get="/files" hx-target="#files-table" hx-push-url="true" hx-trigger="submit, input delay:500ms" hx-sync="this:replace">
+<input type="search" name="q" value="{{.Data.Q}}" placeholder="{{.T "files.search"}}" class="mono">
+<button type="submit">{{.T "ads.filter"}}</button>
+</form>
+<div id="files-table">{{template "files-table" .}}</div>
+{{end}}
+
+{{define "files-table"}}{{with .Data}}
+<div class="scroll">
+<table class="grid">
+<thead><tr><th>{{$.T "col.file"}}</th><th>{{$.T "col.updated"}}</th><th class="num">{{$.T "col.duration"}}</th><th class="num">{{$.T "files.coverage"}}</th>
+<th class="num">{{$.T "files.own_ads"}}</th><th class="num">{{$.T "files.origins"}}</th><th class="num">{{$.T "files.peer_ads"}}</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr><td><a class="mono" href="/file?key={{.Key}}">{{.Key}}</a></td><td>{{when .Updated}}</td><td class="num">{{if .DurationMs}}{{pos .DurationMs}}{{end}}</td>
+<td class="num">{{if .Own}}{{.CoveragePct}}%{{else}}<span class="muted">{{$.T "files.not_here"}}</span>{{end}}</td><td class="num">{{.Ads}}</td><td class="num">{{.Origins}}</td><td class="num">{{.PeerAds}}</td></tr>
+{{else}}<tr><td colspan="7" class="empty">{{$.T "files.none"}}</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+{{template "pager" (args "P" $ "Prev" .Prev "Next" .Next "Target" "#files-table"
+	"Info" (print ($.Tf "files.count" .Total) " · " ($.Tf "ads.page" .Page .Pages)))}}
+{{end}}{{end}}

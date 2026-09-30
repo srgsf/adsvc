@@ -1,0 +1,91 @@
+:root {
+  --bg: #ffffff;
+  --fg: #16202f;
+  --muted: #5b6b82;
+  --accent: #1d5fd0;
+  --line: #dde3ec;
+  --panel: #f4f7fb;
+  --code: #eef2f8;
+  --hdr-bg: #072654;
+  --hdr-text: #c3d6f2;
+  --hdr-active-bg: #f5174b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1420;
+    --fg: #e4eaf3;
+    --muted: #97a6bd;
+    --accent: #6da2ff;
+    --line: #253247;
+    --panel: #142032;
+    --code: #17253a;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 4.5rem; }
+body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--sans); }
+body > .doc, body > .home { flex: 1 0 auto; width: 100%; }
+a { color: var(--accent); }
+img { max-width: 100%; }
+
+/* The header is the admin page's: the logo's navy, and the selected tab is its red AD badge. */
+.top { position: sticky; top: 0; z-index: 2; background: var(--hdr-bg); }
+.bar { max-width: 72rem; margin: 0 auto; padding: .6rem 1rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: .5rem; font-weight: 700; font-size: 1.15rem; color: #fff; text-decoration: none; }
+.brand img { border-radius: 7px; }
+nav { display: flex; gap: .25rem; flex-wrap: wrap; }
+nav a { color: var(--hdr-text); text-decoration: none; padding: .3rem .7rem; border-radius: 6px; }
+nav a:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+nav a[aria-current] { background: var(--hdr-active-bg); color: #fff; font-weight: 600; }
+
+.doc { max-width: 72rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2.5rem; }
+.toc { position: sticky; top: 4.5rem; align-self: start; max-height: calc(100vh - 9rem); overflow: auto; font-size: .9rem; }
+.toc p { margin: 0 0 .4rem; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc ul ul { padding-left: .9rem; }
+.toc li { margin: .25rem 0; }
+.toc a { color: var(--muted); text-decoration: none; }
+.toc a:hover { color: var(--fg); }
+main { min-width: 0; max-width: 48rem; }
+main > :first-child { margin-top: 0; }
+.home { max-width: 48rem; margin: 0 auto; padding: 1rem 1rem 3rem; }
+
+h1 { font-size: 2rem; line-height: 1.2; margin: 1.5rem 0 1rem; }
+h2 { font-size: 1.4rem; margin: 2.4rem 0 .6rem; padding-top: .4rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.1rem; margin: 1.8rem 0 .4rem; }
+p, ul, ol { margin: .8rem 0; }
+li { margin: .25rem 0; }
+code { font: .88em var(--mono); background: var(--code); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: .85rem; }
+
+.scroll { overflow-x: auto; margin: 1rem 0; }
+table { border-collapse: collapse; font-size: .92rem; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .4rem .65rem; text-align: left; vertical-align: top; }
+th { background: var(--panel); }
+td code { white-space: normal; word-break: break-word; }
+
+.hero { padding: 2.5rem 0 1.5rem; }
+.hero .title { display: flex; align-items: center; gap: 1.1rem; margin-bottom: 1.4rem; }
+.hero .title > div { display: flex; flex-direction: column; line-height: 1.1; }
+.hero .name { font-size: 3.4rem; font-weight: 700; }
+.hero .tagline { font-size: 1.3rem; color: var(--muted); margin-top: .3rem; }
+.hero p { font-size: 1.2rem; color: var(--muted); margin: 0 0 1.4rem; }
+.hero .logo { width: 96px; height: 96px; border-radius: 22px; flex: none; }
+.cta { display: flex; gap: .7rem; flex-wrap: wrap; }
+.cta a { padding: .55rem 1.1rem; border-radius: 8px; border: 1px solid var(--accent); text-decoration: none; font-weight: 600; }
+.cta a.primary { background: var(--accent); color: var(--bg); }
+
+/* Always visible at the bottom of the window, so the end of the page is never in doubt. */
+footer { position: sticky; bottom: 0; z-index: 2; background: var(--panel); border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+footer p { max-width: 72rem; margin: 0 auto; padding: .55rem 1rem; }
+
+@media (max-width: 52rem) {
+  .doc { display: block; }
+  .toc { position: static; max-height: none; margin-bottom: 1.5rem; padding-bottom: .5rem; border-bottom: 1px solid var(--line); }
+  .hero .name { font-size: 2.4rem; }
+  .hero .tagline { font-size: 1.05rem; }
+  .hero .logo { width: 72px; height: 72px; }
+}

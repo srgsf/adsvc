@@ -1,0 +1,32 @@
+{{define "content"}}
+<h1>{{.T "nav.origins"}}</h1>
+<p class="muted">{{.Tf "origins.hint" (f1 .Data.Unknown) (f1 .Data.MinTrust)}}</p>
+<div id="origins-table">{{template "origins-table" .}}</div>
+{{end}}
+
+{{define "origins-table"}}{{with .Data}}
+<div class="scroll">
+<table class="grid">
+<thead><tr><th>{{$.T "col.origin"}}</th><th class="num">{{$.T "col.weight"}}</th><th class="num">{{$.T "origins.records"}}</th><th>{{$.T "origins.last"}}</th>
+<th class="num">{{$.T "origins.ads"}}</th><th class="num">{{$.T "origins.trashed"}}</th><th class="num">{{$.T "origins.dups"}}</th><th class="num">{{$.T "origins.retracted"}}</th>
+<th class="num">{{$.T "origins.votes"}}</th><th>{{$.T "origins.policy"}}</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr{{if .Blocked}} class="bad"{{end}}>
+<td>{{template "origin-id" (list ($.Origin .Origin) .Origin.Short .Origin.String)}}
+{{if .Managed}}<span class="tag">{{$.T "origins.managed"}}</span>{{end}}{{if .Blocked}} <span class="tag bad">{{$.T "origins.blocked"}}</span>{{end}}</td>
+<td class="num">{{f1 .Weight}}</td><td class="num">{{.Records}}</td><td>{{when .LastReceived}}</td>
+<td class="num">{{.Ads}}</td><td class="num">{{.Trashed}} <span class="muted">{{pct .Trashed .Ads}}</span></td><td class="num">{{.Dups}}</td><td class="num">{{.Retracted}}</td><td class="num">{{.Votes}}</td>
+<td>{{if .Self}}<span class="muted">{{$.T "origins.self_hint"}}</span>
+{{else if .Managed}}<span class="muted">{{$.T "origins.managed_hint"}}</span>
+{{else}}<form class="inline" hx-post="/origins/{{.Origin}}" hx-target="#origins-table">
+<input name="name" value="{{.Name}}" placeholder="{{$.T "origins.name"}}" size="10">
+<input name="weight" type="number" step="any" min="0" value="{{with .Own}}{{.}}{{end}}" placeholder="{{f1 $.Data.Unknown}}" class="narrow" title="{{$.T "col.weight"}}">
+<label><input type="checkbox" name="blocked" value="1"{{if .Blocked}} checked{{end}}> {{$.T "origins.block"}}</label>
+<button type="submit" name="action" value="save">{{$.T "origins.save"}}</button>
+<button type="submit" name="action" value="clear" class="link">{{$.T "origins.clear"}}</button>
+</form>{{end}}</td>
+</tr>{{else}}<tr><td colspan="10" class="empty">{{$.T "origins.none"}}</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+{{end}}{{end}}

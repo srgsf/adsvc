@@ -1,0 +1,87 @@
+{{define "content"}}
+<h1>{{.T "nav.ads"}}</h1>
+{{with .Data.Filter}}
+<form id="ads-filter" class="filters" action="/ads" hx-get="/ads" hx-target="#ads-table" hx-push-url="true"
+  hx-trigger="submit, change, input delay:500ms" hx-sync="this:replace">
+<input type="search" name="q" value="{{.Q}}" placeholder="{{$.T "ads.search"}}">
+<input type="text" name="origin" value="{{.Origin}}" placeholder="{{$.T "ads.origin"}}" size="12">
+<select name="pinned" title="{{$.T "ads.pinned"}}">
+<option value="">{{$.T "ads.pinned"}}: {{$.T "ads.any"}}</option>
+<option value="yes"{{if eq .Pinned "yes"}} selected{{end}}>{{$.T "ads.pinned"}}: {{$.T "ads.yes"}}</option>
+<option value="no"{{if eq .Pinned "no"}} selected{{end}}>{{$.T "ads.pinned"}}: {{$.T "ads.no"}}</option>
+</select>
+<select name="type" title="{{$.T "col.type"}}">
+<option value="">{{$.T "col.type"}}: {{$.T "ads.any"}}</option>
+{{range $t := list "ad" "intro"}}<option value="{{$t}}"{{if eq $t $.Data.Filter.Type}} selected{{end}}>{{$.T "col.type"}}: {{$.T (printf "type.%s" $t)}}</option>{{end}}
+</select>
+<select name="fp" title="{{$.T "ads.fp"}}">
+<option value="">{{$.T "ads.fp"}}: {{$.T "ads.any"}}</option>
+{{range $v := $.Data.Versions}}<option value="{{$v}}"{{if eq (print $v) $.Data.Filter.FP}} selected{{end}}>{{$.T "ads.fp"}} {{$v}}</option>{{end}}
+</select>
+<select name="sort" title="{{$.T "ads.sort"}}">
+{{range $s := list "created" "label"}}<option value="{{$s}}"{{if eq $s $.Data.Filter.Sort}} selected{{end}}>{{$.T "ads.sort"}}: {{$.T (printf "sort.%s" $s)}}</option>{{end}}
+</select>
+<button type="submit">{{$.T "ads.filter"}}</button>
+</form>
+{{end}}
+<div id="ads-table">{{template "ads-table" .}}</div>
+{{end}}
+
+{{define "ads-table"}}{{with .Data}}
+<form id="bulk" hx-post="/ads/bulk" hx-target="#ads-table" hx-include="#ads-filter" hx-confirm="{{$.T "ads.bulk_confirm"}}">
+<div class="toolbar">
+<span class="muted">{{$.Tf "ads.count" .Total}}</span>
+<span class="spacer"></span>
+<select name="action">
+<option value="up">{{$.T "ads.vote_up"}}</option>
+<option value="down">{{$.T "ads.vote_down"}}</option>
+<option value="pin">{{$.T "ads.pin"}}</option>
+<option value="unpin">{{$.T "ads.unpin"}}</option>
+<option value="delete">{{$.T "ads.delete"}}</option>
+</select>
+<select name="reason" title="{{$.T "ad.reason"}}">
+<option value="">{{$.T "ads.default_reason"}}</option>
+{{range $r := list "good" "not_ad" "boundary" "dup"}}<option value="{{$r}}">{{$.T (printf "reason.%s" $r)}}</option>{{end}}
+</select>
+<button type="submit" data-needs-selection="id" disabled>{{$.T "ads.apply"}}</button>
+</div>
+<div class="scroll">
+<table class="grid">
+<thead><tr>
+<th class="check"><input type="checkbox" data-select-all="id" title="{{$.T "ads.select_all"}}"></th>
+<th class="dotcol" title="{{$.T "ads.dup_col"}}"></th>
+<th>{{$.T "col.label"}}</th><th>{{$.T "col.type"}}</th><th>{{$.T "col.id"}}</th><th>{{$.T "col.author"}}</th><th class="num">{{$.T "col.duration"}}</th>
+<th class="num">{{$.T "col.trust"}}</th><th class="num">{{$.T "col.votes"}}</th><th class="num">{{$.T "col.files"}}</th>
+<th class="num">{{$.T "col.confirmations"}}</th><th>{{$.T "col.last_seen"}}</th><th>{{$.T "col.state"}}</th>
+</tr></thead>
+<tbody>
+{{range .Rows}}
+<tr{{if not .Tracked}} class="dim"{{end}}>
+<td class="check"><input type="checkbox" name="id" value="{{.ID}}"></td>
+<td class="dotcol">{{if .Canonical}}<a class="dot bad" href="/ads/{{.Canonical}}" title="{{$.T "ad.is_dup_of"}} {{or .CanonLabel (short .Canonical)}} {{short .Canonical}}"></a>{{else if .DupedBy}}{{with index .DupedBy 0}}<a class="dot bad" href="/ads/{{.ID}}" title="{{$.T "ad.duped_by"}} {{or .Label (short .ID)}} {{short .ID}}"></a>{{end}}{{else}}<span id="dup-{{.ID}}"></span>{{end}}</td>
+<td><a href="/ads/{{.ID}}">{{.Label}}</a></td>
+<td>{{$.T (printf "type.%s" .Type)}}</td>
+<td class="mono">{{short .ID}}</td>
+<td>{{$.Origin .Author}}</td>
+<td class="num">{{secs .DurationMs}}</td>
+<td class="num">{{f1 .Trust}}</td>
+<td class="num"><span class="up">+{{.Up}}</span> <span class="down">−{{.Down}}</span></td>
+<td class="num">{{.Files}}</td>
+<td class="num">{{.Confirmations}}</td>
+<td>{{when .LastSeen}}</td>
+<td>{{if .Tracked}}<span class="tag ok">{{$.T "ads.tracked"}}</span>{{end}}{{if .Pinned}} <span class="tag">{{$.T "ads.pinned"}}</span>{{end}}{{if ne .State "active"}} <span class="tag warn">{{$.T (printf "state.%s" .State)}}</span>{{end}}</td>
+</tr>
+{{else}}
+<tr><td colspan="13" class="empty">{{$.T "ads.none"}}</td></tr>
+{{end}}
+</tbody>
+</table>
+</div>
+</form>
+{{if .DupsURL}}<div hidden hx-get="{{.DupsURL}}" hx-trigger="load" hx-swap="none"></div>{{end}}
+{{template "pager" (args "P" $ "Prev" .Prev "Next" .Next "Target" "#ads-table" "Info" ($.Tf "ads.page" .Page .Pages))}}
+{{end}}{{end}}
+
+{{define "ads-dups"}}{{range .Data}}
+<span id="dup-{{.ID}}" hx-swap-oob="true"><a class="dot warn" href="/ads/{{.PossibleDup.ID}}" title="{{$.Tf "ads.possible_dup_of" (or .PossibleDup.Label (short .PossibleDup.ID)) .PossibleDup.Score}}"></a></span>
+{{end}}{{end}}

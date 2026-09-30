@@ -1,0 +1,76 @@
+# Checks on every push and pull request, and before a release (release.yml calls this).
+# Everything runs through make in containers, as it does locally: the runner needs only
+# make and Docker.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow_ref }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-mod
+            .cache/go-build-test
+          key: go-lint-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-lint-${{ hashFiles('go.sum') }}-
+            go-lint-
+      - run: make lint
+      - run: make release-check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-mod
+            .cache/go-build-test
+          key: go-test-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-test-${{ hashFiles('go.sum') }}-
+            go-test-
+      - run: make vet
+      - run: make test
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: ignore
+
+  # The decode path against the minimal ffmpeg the release ships (TestDecodeFormats).
+  test-minimal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v4
+        with:
+          path: .cache/ffmpeg
+          key: ffmpeg-linux_amd64-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .cache/go-mod
+            .cache/go-build-test
+          key: go-test-minimal-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          restore-keys: |
+            go-test-minimal-${{ hashFiles('go.sum') }}-
+            go-test-minimal-
+      - run: make test-minimal

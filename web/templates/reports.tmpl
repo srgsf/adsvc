@@ -1,0 +1,42 @@
+{{define "content"}}
+<h1>{{.T "nav.reports"}}</h1>
+<section class="howto">
+<h2>{{.T "reports.howto"}}</h2>
+<ol>
+<li>{{.T "reports.step_install"}} <a class="button" href="/reports/adskip.lua" download>{{.T "reports.download"}}</a>
+<br><span class="muted">{{.T "reports.script_dirs"}}</span> <code>~/.config/mpv/scripts/</code> · <code>%APPDATA%\mpv\scripts\</code></li>
+<li>{{.T "reports.step_play"}}</li>
+<li>{{.T "reports.step_mark"}}
+<dl class="keys">
+<dt><kbd>,</kbd> <kbd>.</kbd></dt><dd>{{.T "reports.key_step"}}</dd>
+<dt><kbd>a</kbd></dt><dd>{{.T "reports.key_start"}}</dd>
+<dt><kbd>t</kbd></dt><dd>{{.T "reports.key_intro"}}</dd>
+<dt><kbd>A</kbd></dt><dd>{{.T "reports.key_end"}}</dd>
+<dt><kbd>Ctrl</kbd>+<kbd>a</kbd></dt><dd>{{.T "reports.key_skip"}}</dd>
+</dl></li>
+<li>{{.T "reports.step_done"}}</li>
+</ol>
+<p class="muted small">{{.T "reports.token_note"}}</p>
+</section>
+<div id="reports-table">{{template "reports-table" .}}</div>
+{{end}}
+
+{{define "reports-table"}}{{with .Data}}
+{{range .Files}}
+<section class="report-file">
+<h2 class="mono wrap">{{.Source}}</h2>
+<div class="scroll">
+<table class="grid">
+<thead><tr><th class="num">{{$.T "reports.at"}}</th>{{if $.Data.All}}<th>{{$.T "reports.user"}}</th>{{end}}<th>{{$.T "reports.note"}}</th><th>{{$.T "reports.created"}}</th><th>{{$.T "reports.command"}}</th><th></th></tr></thead>
+<tbody>
+{{range .Reports}}<tr>
+<td class="num">{{pos .PosMs}}</td>{{if $.Data.All}}<td>{{.User}}</td>{{end}}<td class="wrap">{{.Note}}</td><td>{{when .Created}}</td>
+<td><button type="button" class="link" data-copy="{{.Command}}" title="{{.Command}}">{{$.T "reports.copy"}}</button></td>
+<td><button class="link danger" hx-post="/reports/{{.ID}}/delete" hx-target="#reports-table" hx-confirm="{{$.T "reports.delete_confirm"}}">{{$.T "reports.delete"}}</button></td>
+</tr>{{end}}
+</tbody>
+</table>
+</div>
+</section>
+{{else}}<p class="empty muted">{{$.T "reports.none"}}</p>{{end}}
+{{end}}{{end}}

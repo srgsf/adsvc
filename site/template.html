@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$if(home)$adsvc: finds known ads in video streams$else$$pagetitle$ · adsvc$endif$</title>
+<meta name="description" content="$description$">
+<link rel="icon" type="image/png" href="favicon-32.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+<div class="bar">
+<a class="brand" href="index.html"><img src="logo-256.png" alt="" width="28" height="28">adsvc</a>
+<nav>
+<a href="usage.html"$if(usage)$ aria-current="page"$endif$>User guide</a>
+<a href="handoff.html"$if(handoff)$ aria-current="page"$endif$>Client integration</a>
+<a href="$repo$">GitHub</a>
+</nav>
+</div>
+</header>
+$if(home)$
+<main class="home">
+$body$
+</main>
+$else$
+<div class="doc">
+<aside class="toc">
+<p>On this page</p>
+$table-of-contents$
+</aside>
+<main>
+$body$
+</main>
+</div>
+$endif$
+<footer>
+<p>adsvc finds known ads and intros in video streams so that players can take action. <a href="$repo$">Source and releases</a>.</p>
+</footer>
+</body>
+</html>
