@@ -32,18 +32,27 @@ type session struct {
 	q          chan qchunk
 	queued     atomic.Int64 // bytes waiting for the analyser
 	dead       atomic.Bool  // analysis given up
-	detached   bool         // created during shutdown: forward only (see detached)
-	dropping   atomic.Bool  // behind: drop until the analyser has caught up completely
+	opened     atomic.Bool  // the container is recognised
+	indexed    atomic.Bool  // the container has the index it needs (always true for those that need none)
+	headArmed  atomic.Bool  // a read of the file head is scheduled (backfill.go)
+	tailArmed  atomic.Bool
+	stop       context.Context // ends with the session: cancels backfills
+	cancel     context.CancelFunc
+	bg         sync.WaitGroup // backfills
+	src        *source        // guarded by mu
+	detached   bool           // created during shutdown: forward only (see detached)
+	dropping   atomic.Bool    // behind: drop until the analyser has caught up completely
 	sendMu     sync.RWMutex
 	sendClosed bool
 
 	// worker-only state
-	sniff   []byte
-	seen    int64
-	cont    demux.Container
-	sink    *decode.Sink
-	ctype   string
-	nextOff int64
+	sniff      []byte
+	seen       int64
+	headWarned bool
+	cont       demux.Container
+	sink       *decode.Sink
+	ctype      string
+	nextOff    int64
 
 	mu      sync.Mutex
 	key     string
@@ -148,6 +157,9 @@ func (p *Proxy) session(q url.Values, orig *url.URL) *session {
 		s.used = time.Now()
 		s.marking = s.marking || marking
 		s.mu.Unlock()
+		if marking {
+			s.ring.Keep()
+		}
 		<-s.ready
 		return s
 	}
@@ -164,9 +176,13 @@ func (p *Proxy) session(q url.Values, orig *url.URL) *session {
 	if s.key == "" {
 		s.key = "session:" + id // provisional until the content key can be computed
 	}
+	s.stop, s.cancel = context.WithCancel(p.ctx)
 	p.sess[id] = s
 	s.wg.Add(1)
 	p.mu.Unlock()
+	if marking {
+		s.ring.Keep()
+	}
 	s.init(key, orig)
 	go s.worker()
 	return s
@@ -176,10 +192,7 @@ func (p *Proxy) session(q url.Values, orig *url.URL) *session {
 // open report, and its stored map (when the file key is known already).
 func (s *session) init(key string, orig *url.URL) {
 	defer close(s.ready)
-	reported := s.p.reported(s.id, key, s.norm)
-	s.mu.Lock()
-	s.reported = reported
-	s.mu.Unlock()
+	s.setReports(s.p.reported(s.id, key, s.norm))
 	if key != "" {
 		s.load(key)
 	}
@@ -447,6 +460,9 @@ func (s *session) worker() {
 	defer s.wg.Done()
 	for c := range s.q {
 		s.consume(c.off, c.data)
+		if s.cont != nil {
+			s.refreshIndexed()
+		}
 		s.queued.Add(-int64(len(c.data)))
 		queueBytes.Add(-float64(len(c.data)))
 		c.release()
@@ -460,7 +476,7 @@ func (s *session) worker() {
 
 const (
 	sniffHead = 1024     // enough of the file start for demux.Sniff to be conclusive
-	sniffMax  = 16 << 20 // ... but give up if the player never reads the start at all
+	sniffMax  = 16 << 20 // ... and say so if the player has read this much without ever reading the start
 )
 
 func (s *session) consume(off int64, data []byte) {
@@ -481,11 +497,17 @@ func (s *session) consume(off int64, data []byte) {
 			s.sniff = append(s.sniff, data[have-off:]...)
 		}
 		typ := demux.Sniff(s.sniff)
+		if typ == "" && off > int64(len(s.sniff)) {
+			s.armHead() // the player started past the head, which it may never send
+		}
 		if typ == "" {
 			if len(s.sniff) >= sniffHead {
 				s.disable("unknown_container", errors.New("container not recognised"))
-			} else if s.seen > sniffMax {
-				s.disable("no_head", errors.New("the player never read the start of the file"))
+			} else if s.seen > sniffMax && !s.headWarned {
+				// Not fatal: players often open with a mid-file range and read the
+				// head later (a seek back, a second connection), so keep waiting.
+				s.headWarned = true
+				slog.Warn("waiting for the start of the file", "session", s.id, "seen", s.seen)
 			}
 			return
 		}
@@ -532,6 +554,12 @@ func (s *session) open(typ string) bool {
 		return false
 	}
 	s.cont = c
+	s.opened.Store(true)
+	s.indexed.Store(true)
+	if _, ok := c.(demux.Indexed); ok {
+		s.refreshIndexed()
+		s.armTail()
+	}
 	s.mu.Lock()
 	s.ctype = typ
 	s.mu.Unlock()
@@ -606,6 +634,10 @@ func (s *session) close(reason string) {
 	}
 	s.closed = true
 	s.mu.Unlock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	s.bg.Wait() // backfills feed the queue
 	sessionsClosed.With(reason).Inc()
 	sessionsActive.Dec()
 	s.sendMu.Lock()

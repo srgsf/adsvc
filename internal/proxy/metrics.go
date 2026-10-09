@@ -25,7 +25,7 @@ var (
 		"Containers recognised at the start of a session, by type: avi, matroska, mp4, mpegts, mp3.", "type")
 	// increase(adsvc_analysis_disabled_total{reason="panic"}[1h]) > 0
 	analysisDisabled = metrics.NewCounterVec("adsvc_analysis_disabled_total",
-		"Sessions whose analysis was turned off, by reason: unknown_container, no_head, open_failed, demux_error, panic.", "reason")
+		"Sessions whose analysis was turned off, by reason: unknown_container, open_failed, demux_error, panic.", "reason")
 
 	queueBytes = metrics.NewGauge("adsvc_analyser_queue_bytes",
 		"Bytes queued between players and analysers, over every session.")

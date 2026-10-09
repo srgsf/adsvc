@@ -723,3 +723,85 @@ func TestHeadStartsNoSession(t *testing.T) {
 	}
 	px.mu.Unlock()
 }
+
+// TestProxyBackfill: a player that starts in the middle of the file and never sends the
+// head or the index (it has them cached) still gets its file analysed, because the proxy
+// reads them itself.
+func TestProxyBackfill(t *testing.T) {
+	testmedia.NeedFFmpeg(t)
+	defer func(h, tl time.Duration) { headWait, tailWait = h, tl }(headWait, tailWait)
+	headWait, tailWait = 200*time.Millisecond, 200*time.Millisecond
+	const pre, adDur, post = 20 * time.Second, 15 * time.Second, 25 * time.Second
+	tests := []struct {
+		name string
+		ext  string
+		args []string
+	}{
+		{"mkv-ac3", ".mkv", []string{"-c:a", "ac3"}},
+		{"mp4-aac-moov-at-end", ".mp4", []string{"-c:a", "aac"}},
+		{"ts-ac3", ".ts", []string{"-c:a", "ac3"}},
+	}
+	dir := t.TempDir()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(dir, tt.name+tt.ext)
+			testmedia.WithAd(t, path, pre, adDur, post, tt.args...)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			size := int64(len(raw))
+			src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var from int64
+				_, _ = fmt.Sscanf(r.Header.Get("Range"), "bytes=%d-", &from)
+				if from > 0 && strings.HasSuffix(r.Header.Get("Range"), "-") { // the player: plays at its own pace
+					w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", from, size-1, size))
+					w.WriteHeader(http.StatusPartialContent)
+					for p := raw[from:]; len(p) > 0; {
+						n := min(len(p), 32<<10)
+						_, _ = w.Write(p[:n])
+						w.(http.Flusher).Flush()
+						p = p[n:]
+						time.Sleep(100 * time.Millisecond)
+					}
+					return
+				}
+				http.ServeFile(w, r, path)
+			}))
+			defer src.Close()
+			px, err := New(t.Context(), Config{FFmpeg: testmedia.Decoder()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer px.Close()
+			front := httptest.NewServer(px.Handler())
+			defer front.Close()
+			if _, err := px.Lib.Add(t.Context(), "ad", "", testmedia.PCM(t, path, pre, adDur), nil); err != nil {
+				t.Fatal(err)
+			}
+			u := src.URL + "/f" + tt.ext
+			req, _ := http.NewRequest(http.MethodGet, front.URL+"/s?u="+urlEscape(u), nil)
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", size/5))
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body) // the source plays at its own pace
+			resp.Body.Close()
+
+			var rep Report
+			for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+				rep = fetchReport(t, front.URL+"/ads/file?u="+urlEscape(u))
+				if len(rep.Ads) > 0 && rep.Ads[0].Confirmed {
+					break
+				}
+			}
+			if len(rep.Ads) != 1 || !rep.Ads[0].Confirmed {
+				t.Fatalf("ad not detected: %+v", rep)
+			}
+			if got := rep.Ads[0]; (got.Start - pre).Abs() > 300*time.Millisecond {
+				t.Fatalf("ad at %v-%v, want %v-%v", got.Start, got.End, pre, pre+adDur)
+			}
+		})
+	}
+}

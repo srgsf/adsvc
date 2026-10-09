@@ -64,3 +64,34 @@ func TestRingResetAfterWrapKeepsOnlyWhatIsHeld(t *testing.T) {
 		t.Fatalf("held from %v", from)
 	}
 }
+
+func TestRingKeepSurvivesOtherRuns(t *testing.T) {
+	r := NewPCMRing(10 * time.Second)
+	r.Keep()
+	r.Reset(100 * time.Second)
+	samples(r, 100*time.Second, 8*time.Second)
+	r.Reset(108 * time.Second)
+	samples(r, 108*time.Second, 7*time.Second)
+	r.Reset(500 * time.Second) // the player went elsewhere
+	samples(r, 500*time.Second, 30*time.Second)
+	got, err := r.Slice(101*time.Second, 114*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := mediatime.SamplesAt(101*time.Second, fingerprint.SampleRate)
+	for i, v := range got {
+		if want := float32((first+int64(i))%32768) / 32768; v != want {
+			t.Fatalf("sample %d = %v, want %v", i, v, want)
+		}
+	}
+	if _, err := r.Slice(114*time.Second, 118*time.Second); err == nil {
+		t.Fatal("audio never decoded must not be there")
+	}
+	r.Forget(115 * time.Second)
+	if _, err := r.Slice(101*time.Second, 105*time.Second); err == nil {
+		t.Fatal("forgotten audio must be gone")
+	}
+	if _, err := r.Slice(521*time.Second, 525*time.Second); err != nil {
+		t.Fatal(err)
+	}
+}

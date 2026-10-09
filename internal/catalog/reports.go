@@ -147,12 +147,12 @@ func (db *DB) DeleteReportsIn(ctx context.Context, user string, files []string, 
 	return int(n), nil
 }
 
-// HasReports reports whether anyone reported an ad in a file known by any of files (file
-// keys or normalised URLs).
-func (db *DB) HasReports(ctx context.Context, files []string) (bool, error) {
+// ReportPositions returns the positions (ms) of everyone's reports of a file known by any
+// of files (file keys or normalised URLs).
+func (db *DB) ReportPositions(ctx context.Context, files []string) ([]int32, error) {
 	files = nonEmpty(files)
 	if len(files) == 0 {
-		return false, nil
+		return nil, nil
 	}
 	in := strings.TrimSuffix(strings.Repeat("?,", len(files)), ",")
 	args := make([]any, 0, 2*len(files))
@@ -161,13 +161,24 @@ func (db *DB) HasReports(ctx context.Context, files []string) (bool, error) {
 			args = append(args, f)
 		}
 	}
-	var n int
 	//nolint:gosec // G202: only placeholders are concatenated
-	err := db.r.QueryRowContext(ctx, `SELECT count(*) FROM reports WHERE file_key IN (`+in+`) OR norm IN (`+in+`)`, args...).Scan(&n)
+	rows, err := db.r.QueryContext(ctx, `SELECT pos_ms FROM reports WHERE file_key IN (`+in+`) OR norm IN (`+in+`)`, args...)
 	if err != nil {
-		return false, fmt.Errorf("reading reports: %w", err)
+		return nil, fmt.Errorf("reading reports: %w", err)
 	}
-	return n > 0, nil
+	defer rows.Close()
+	var out []int32
+	for rows.Next() {
+		var pos int32
+		if err := rows.Scan(&pos); err != nil {
+			return nil, fmt.Errorf("reading reports: %w", err)
+		}
+		out = append(out, pos)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading reports: %w", err)
+	}
+	return out, nil
 }
 
 func nonEmpty(ss []string) []string {

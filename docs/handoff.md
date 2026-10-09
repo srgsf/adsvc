@@ -11,7 +11,8 @@ client knows:  source  = https://ts.example.com/stream/Film.mkv?link=<ih>&index=
 plays:         https://ads.example.com/s?u=<source, percent-encoded>
 
 adsvc fetches: the source (after -route rewriting), forwarding Range etc., and analyses
-               exactly the bytes it forwards; no extra reads.
+               the bytes it forwards. If the player starts mid-file and never sends the file head
+               (or the index at the end of an AVI / MP4), adsvc reads that part itself, once.
 ```
 
 ## Stream URL

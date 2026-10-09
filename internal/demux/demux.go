@@ -46,6 +46,13 @@ type Container interface {
 	Close() error
 }
 
+// Indexed is implemented by containers that cannot time a seek without an index stored
+// away from the start of the file (AVI idx1, the moov of a progressive MP4). Indexed
+// reports that they have it; a proxy whose player did not send it may fetch it itself.
+type Indexed interface {
+	Indexed() bool
+}
+
 // ErrUnsupported means we recognise the file but have no demuxer for it yet;
 // the proxy keeps forwarding bytes and simply does not analyse them.
 var ErrUnsupported = errors.New("unsupported container")

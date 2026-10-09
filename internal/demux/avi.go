@@ -62,6 +62,9 @@ func (c *aviContainer) Range(off int64) {
 	c.pos, c.active = off, false
 }
 
+// Indexed implements Indexed.
+func (c *aviContainer) Indexed() bool { return c.haveIndex }
+
 func (c *aviContainer) Close() error {
 	c.sink.Close()
 	c.head, c.regs, c.pending = nil, nil, nil

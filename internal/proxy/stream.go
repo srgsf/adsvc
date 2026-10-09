@@ -105,6 +105,7 @@ func (p *Proxy) serveStream(w http.ResponseWriter, r *http.Request) {
 	off, total := bodyRange(resp)
 	s := p.session(q, orig)
 	s.setSize(total)
+	s.setSource(cfg, up, req.Header)
 	slog.Debug("serving", "session", s.id, "offset", off, "status", resp.StatusCode)
 
 	t := &tap{w: w, rc: http.NewResponseController(w), s: s, off: off}

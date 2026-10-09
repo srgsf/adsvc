@@ -51,8 +51,9 @@ func (p *Proxy) addReport(w http.ResponseWriter, r *http.Request) {
 	}
 	if s := p.lookup(r); s != nil { // being played right now: keep its audio for marking
 		s.mu.Lock()
-		s.reported = true
+		files := append([]string{s.id, s.key, s.norm}, s.alias...)
 		s.mu.Unlock()
+		s.setReports(p.reported(files...))
 	}
 	reports.Inc()
 	slog.Info("ad reported", "report", id, "user", rep.User, "key", key, "upstream", filekey.RedactURL(u), "position_ms", rep.PosMs)
@@ -107,17 +108,31 @@ func (p *Proxy) clearReports(r *http.Request, s *session, start, end time.Durati
 	if n > 0 {
 		slog.Info("reports cleared", "session", s.id, "user", user, "reports", n)
 	}
-	reported := p.reported(files...)
-	s.mu.Lock()
-	s.reported = reported
-	s.mu.Unlock()
+	s.setReports(p.reported(files...))
 }
 
-// reported reports whether a file known by any of files has an open report (anyone's).
-func (p *Proxy) reported(files ...string) bool {
-	ok, err := p.DB.HasReports(p.ctx, files)
+// reported reports whether a file known by any of files has an open report (anyone's),
+// and where they are.
+func (p *Proxy) reported(files ...string) []time.Duration {
+	pos, err := p.DB.ReportPositions(p.ctx, files)
 	if err != nil {
 		slog.Warn("reading reports", "err", err)
 	}
-	return ok
+	out := make([]time.Duration, len(pos))
+	for i, ms := range pos {
+		out[i] = mediatime.Dur(ms)
+	}
+	return out
+}
+
+// setReports records the open reports of the session's file: while there are any, the
+// session is in marking mode: nothing counts as analysed, and the ring keeps the audio of every range by
+// media time (PCMRing.Keep).
+func (s *session) setReports(pos []time.Duration) {
+	s.mu.Lock()
+	s.reported = len(pos) > 0
+	s.mu.Unlock()
+	if len(pos) > 0 {
+		s.ring.Keep()
+	}
 }

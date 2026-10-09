@@ -190,6 +190,7 @@ func (p *Proxy) Mark(ctx context.Context, s *session, start, end time.Duration, 
 	slog.Info("enrolled ad", "ad", ad.ID, "type", ad.Type, "label", ad.Label, "duration", ad.Duration, "hashes", ad.Hashes, "session", s.id)
 	p.rescan(ctx)
 	s.marked(ad, start, end, pcm)
+	s.ring.Forget(end) // the next ad is further on
 	return ad, nil
 }
 

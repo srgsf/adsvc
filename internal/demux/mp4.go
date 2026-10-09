@@ -101,6 +101,9 @@ func (c *mp4Container) Range(off int64) {
 	}
 }
 
+// Indexed implements Indexed: fragmented files carry their index in each fragment.
+func (c *mp4Container) Indexed() bool { return c.moov || c.fragmented }
+
 func (c *mp4Container) Close() error {
 	c.sink.Close()
 	c.caps, c.samples = nil, nil

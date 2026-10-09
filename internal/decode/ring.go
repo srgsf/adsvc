@@ -1,7 +1,11 @@
 package decode
 
 import (
+	"cmp"
 	"errors"
+	"maps"
+	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -19,6 +23,110 @@ type PCMRing struct {
 	n    int64 // samples written since Reset
 	lo   int64 // no sample before this one is held (a Reset that continued the run)
 	odd  []byte
+	keep keepStore
+}
+
+// keepStore is the audio of marking mode (see Keep): every decoded range stays, by media
+// time, whichever run it came from. Players seek and read ahead all over the file, so the
+// ring's window of the latest run is not enough there.
+type keepStore struct {
+	on   bool
+	segs map[int64][]int16 // by absolute sample / keepSeg
+	have [][2]int64        // filled parts (absolute samples), sorted and merged
+}
+
+const (
+	keepSeg  = 80000                    // 10 s per segment
+	keepSegs = 45 * 60 * 8000 / keepSeg // at most 45 minutes (about 43 MiB)
+)
+
+// Keep switches marking mode on: from now on decoded audio is kept by media time, up to
+// 45 minutes (the lowest media time goes first), until Forget or Release.
+func (r *PCMRing) Keep() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.keep.on {
+		r.keep = keepStore{on: true, segs: map[int64][]int16{}}
+	}
+}
+
+// Forget drops the kept audio before t: the ad that ended there has been marked.
+func (r *PCMRing) Forget(t time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.forget(mediatime.SamplesAt(t, fingerprint.SampleRate))
+}
+
+func (r *PCMRing) forget(before int64) {
+	for i, seg := range r.keep.segs {
+		if (i+1)*keepSeg <= before {
+			ringBytes.Add(-float64(2 * len(seg)))
+			delete(r.keep.segs, i)
+		}
+	}
+	r.keep.have = clip(r.keep.have, before)
+}
+
+// clip removes what lies before lo from the spans.
+func clip(spans [][2]int64, lo int64) [][2]int64 {
+	var out [][2]int64
+	for _, sp := range spans {
+		if sp[1] <= lo {
+			continue
+		}
+		out = append(out, [2]int64{max(sp[0], lo), sp[1]})
+	}
+	return out
+}
+
+// store copies the samples [n0,n1) of the current run into the kept audio.
+func (r *PCMRing) store(n0, n1 int64) {
+	base := mediatime.SamplesAt(r.t0, fingerprint.SampleRate)
+	n0 = max(n0, n1-int64(len(r.buf))) // older ones are overwritten already
+	for i := base + n0; i < base+n1; {
+		si := i / keepSeg
+		end := min((si+1)*keepSeg, base+n1)
+		seg := r.keep.segs[si]
+		if seg == nil {
+			if len(r.keep.segs) >= keepSegs {
+				r.forget((slices.Min(slices.Collect(maps.Keys(r.keep.segs))) + 1) * keepSeg)
+			}
+			seg = make([]int16, keepSeg)
+			r.keep.segs[si] = seg
+			ringBytes.Add(float64(2 * keepSeg))
+		}
+		for ; i < end; i++ {
+			seg[i%keepSeg] = r.buf[(i-base)%int64(len(r.buf))]
+		}
+	}
+	r.keep.have = addSpan(r.keep.have, base+n0, base+n1)
+}
+
+// addSpan merges [a,z) into the sorted, merged spans.
+func addSpan(spans [][2]int64, a, z int64) [][2]int64 {
+	out := make([][2]int64, 0, len(spans)+1)
+	for _, s := range spans {
+		if s[1] < a || s[0] > z {
+			out = append(out, s)
+		} else {
+			a, z = min(a, s[0]), max(z, s[1])
+		}
+	}
+	out = append(out, [2]int64{a, z})
+	slices.SortFunc(out, func(x, y [2]int64) int { return cmp.Compare(x[0], y[0]) })
+	return out
+}
+
+// kept returns [a,z) (absolute samples) from the kept audio, or nil.
+func (r *PCMRing) kept(a, z int64) []float32 {
+	if !slices.ContainsFunc(r.keep.have, func(s [2]int64) bool { return s[0] <= a && z <= s[1] }) {
+		return nil
+	}
+	out := make([]float32, z-a)
+	for i := a; i < z; i++ {
+		out[i-a] = float32(r.keep.segs[i/keepSeg][i%keepSeg]) / 32768
+	}
+	return out
 }
 
 // NewPCMRing holds the last d of audio (5 minutes when d <= 0).
@@ -41,6 +149,8 @@ func (r *PCMRing) Release() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	ringBytes.Add(-float64(2 * len(r.buf)))
+	r.forget(math.MaxInt64)
+	r.keep = keepStore{}
 	r.buf, r.n, r.lo = nil, 0, 0
 }
 
@@ -63,6 +173,12 @@ func (r *PCMRing) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	written := len(p)
+	n0 := r.n
+	defer func() {
+		if r.keep.on && r.n > n0 {
+			r.store(n0, r.n)
+		}
+	}()
 	if len(r.odd) == 1 && len(p) > 0 {
 		r.put(int16(uint16(r.odd[0]) | uint16(p[0])<<8))
 		p, r.odd = p[1:], nil
@@ -106,6 +222,9 @@ func (r *PCMRing) Slice(from, to time.Duration) ([]float32, error) {
 		return nil, errors.New("empty range")
 	}
 	if i0 < r.first() || i1 > r.n {
+		if out := r.kept(mediatime.SamplesAt(from, fingerprint.SampleRate), mediatime.SamplesAt(to, fingerprint.SampleRate)); out != nil {
+			return out, nil
+		}
 		return nil, errors.New("outside the audio still buffered (play through the ad first)")
 	}
 	out := make([]float32, i1-i0)
