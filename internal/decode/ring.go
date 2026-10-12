@@ -84,7 +84,7 @@ func (r *PCMRing) store(n0, n1 int64) {
 	base := mediatime.SamplesAt(r.t0, fingerprint.SampleRate)
 	n0 = max(n0, n1-int64(len(r.buf))) // older ones are overwritten already
 	for i := base + n0; i < base+n1; {
-		si := i / keepSeg
+		si := segOf(i)
 		end := min((si+1)*keepSeg, base+n1)
 		seg := r.keep.segs[si]
 		if seg == nil {
@@ -96,7 +96,7 @@ func (r *PCMRing) store(n0, n1 int64) {
 			ringBytes.Add(float64(2 * keepSeg))
 		}
 		for ; i < end; i++ {
-			seg[i%keepSeg] = r.buf[(i-base)%int64(len(r.buf))]
+			seg[i-si*keepSeg] = r.buf[(i-base)%int64(len(r.buf))]
 		}
 	}
 	r.keep.have = addSpan(r.keep.have, base+n0, base+n1)
@@ -124,9 +124,20 @@ func (r *PCMRing) kept(a, z int64) []float32 {
 	}
 	out := make([]float32, z-a)
 	for i := a; i < z; i++ {
-		out[i-a] = float32(r.keep.segs[i/keepSeg][i%keepSeg]) / 32768
+		si := segOf(i)
+		out[i-a] = float32(r.keep.segs[si][i-si*keepSeg]) / 32768
 	}
 	return out
+}
+
+// segOf is the segment of absolute sample i, rounding down: a run may start before media
+// time zero (codec priming), so i can be negative.
+func segOf(i int64) int64 {
+	q := i / keepSeg
+	if i%keepSeg < 0 {
+		q--
+	}
+	return q
 }
 
 // NewPCMRing holds the last d of audio (5 minutes when d <= 0).

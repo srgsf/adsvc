@@ -95,3 +95,22 @@ func TestRingKeepSurvivesOtherRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRingKeepBeforeZero(t *testing.T) {
+	r := NewPCMRing(10 * time.Second)
+	r.Keep()
+	r.Reset(-5 * ms) // codec priming puts the first frame before media time zero
+	for t0 := -5 * ms; t0 < 25*time.Second; t0 += time.Second {
+		samples(r, t0, time.Second)
+	}
+	got, err := r.Slice(-5*ms, 2*time.Second) // long gone from the ring, so it comes from the kept audio
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := mediatime.SamplesAt(-5*ms, fingerprint.SampleRate)
+	for i, v := range got {
+		if want := float32(int16((first+int64(i))%32768)) / 32768; v != want {
+			t.Fatalf("sample %d = %v, want %v", i, v, want)
+		}
+	}
+}
